@@ -1,2 +1,4 @@
 telethon
+flask
+gunicorn
 asyncio
