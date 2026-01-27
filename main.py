@@ -6,7 +6,7 @@ import sys
 import time
 from datetime import datetime
 from threading import Thread
-from flask import Flask # New Import for Web Server
+from flask import Flask  # Server ke liye
 
 from telethon import TelegramClient, events, Button, functions, types
 from telethon.sessions import StringSession
@@ -17,7 +17,7 @@ from telethon.errors import (
     PhoneNumberInvalidError
 )
 
-# --- [ CONFIGURATION & SECURITY ] ---
+# --- [ CONFIGURATION ] ---
 API_ID = 30424148 
 API_HASH = '55204cd683c7754c5e9eb114752172cd'
 BOT_TOKEN = '8422844316:AAFDuxgi_pA-FVLAXNaFbZHmlUHYtLLaKak'
@@ -25,11 +25,13 @@ BOT_TOKEN = '8422844316:AAFDuxgi_pA-FVLAXNaFbZHmlUHYtLLaKak'
 ADMIN_IDS = [8052601632, 7429081031, 5208805573] 
 CHANNEL_LINK = "https://t.me/+ycSwWt2wFJ1kYjY9"
 
-# Render par Home directory access nahi hoti kabhi-kabhi, isliye current folder use karein
-DB_PATH = "xirus_master_pro.db" 
+# Render par relative path use karna safe hai
+DB_PATH = "xirus_master_pro.db"
 
-# Logging Level set to Error for Termux speed
-logging.basicConfig(level=logging.ERROR)
+# Logging setup
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 bot = TelegramClient('xirus_core', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 # --- [ ASSETS & STYLING ] ---
@@ -41,23 +43,24 @@ def style(text):
     b = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ0123456789"
     return text.translate(str.maketrans(a, b))
 
-# --- [ WEB SERVER FOR RENDER (KEEP ALIVE) ] ---
+# --- [ 🟢 WEB SERVER (RENDER FIX) ] ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Xirus Modz Bot is Running 24/7!"
+    return "Xirus Bot is Running Successfully!"
 
 def run_http():
-    # Render automatically assigns a PORT via environment variable
+    # Render se PORT variable lena zaroori hai
     port = int(os.environ.get("PORT", 8080))
+    # host='0.0.0.0' hi Render par chalta hai
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_http)
     t.start()
 
-# --- [ CORE DATABASE ARCHITECTURE ] ---
+# --- [ DATABASE ] ---
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""CREATE TABLE IF NOT EXISTS accounts (
@@ -83,7 +86,6 @@ async def start_auto_reply_engine(phone, session_str, reply_text):
         except: pass
 
     try:
-        # Loop argument remove kiya kyunki Telethon naye versions me internal loop use karta hai
         client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
         active_sessions[phone] = client
         
@@ -106,14 +108,10 @@ async def start_auto_reply_engine(phone, session_str, reply_text):
                     except FloodWaitError as f: await asyncio.sleep(f.seconds)
                     except: pass
         
-        # Async task ke andar run_until_disconnected blocking ho sakta hai, isliye ise background task banaya
-        # Note: Telethon background tasks ke liye hume client ko connected rakhna hota hai without blocking main loop
-        # Isliye hum run_until_disconnected yahan call nahi karenge, bas client connect chhod denge.
-        
     except Exception as e: 
-        print(f"Error in engine for {phone}: {e}")
+        logger.error(f"Error in engine for {phone}: {e}")
 
-# --- [ KEYBOARD INTERFACE ] ---
+# --- [ KEYBOARDS ] ---
 def main_kb():
     return [[Button.text("🚀 Setup New Account", resize=True)],
             [Button.text("✅ Activate All", resize=True), Button.text("❌ Deactivate All", resize=True)],
@@ -123,7 +121,7 @@ def admin_kb():
     return [[Button.text("👑 Master Stats", resize=True), Button.text("📢 Global Broadcast", resize=True)],
             [Button.text("🔄 Full System Restart", resize=True), Button.text("🏠 Home", resize=True)]]
 
-# --- [ MASTER MESSAGE HANDLER ] ---
+# --- [ HANDLERS ] ---
 @bot.on(events.NewMessage)
 async def master_router(event):
     uid = event.sender_id
@@ -161,7 +159,6 @@ async def master_router(event):
             msg += f"\n{'🟢' if a[1]==1 else '🔴'} `{a[0]}`"
         await event.respond(msg)
 
-    # --- ADMIN PRIVILEGES ---
     elif text == "/admin" and uid in ADMIN_IDS:
         await event.respond(f"**👑 {style('Admin Control Room')}**", buttons=admin_kb())
 
@@ -171,7 +168,6 @@ async def master_router(event):
             users = conn.execute("SELECT phone, username, owner_id FROM accounts").fetchall()
         msg = f"**📊 {style('Global Database Stats')}**\n\n{style('Total Accounts')}: `{total}`\n{style('Live Engines')}: `{len(active_sessions)}`"
         await event.respond(msg)
-        
         details = "\n".join([f"👤 {style(u[1])} | `{u[0]}` (Admin: `{u[2]}`)" for u in users])
         if len(details) > 4000: details = details[:4000] + "..."
         await event.respond(details)
@@ -183,7 +179,6 @@ async def master_router(event):
         await event.respond(style("System Rebooting..."))
         os.execl(sys.executable, sys.executable, *sys.argv)
 
-# --- [ ADVANCED SETUP LOGIC ] ---
 async def run_account_setup(uid):
     try:
         async with bot.conversation(uid, timeout=600) as conv:
@@ -228,7 +223,6 @@ async def run_account_setup(uid):
     except Exception as e:
         await bot.send_message(uid, f"**❌ {style('Login Failed')}:** `{e}`")
 
-# --- [ GLOBAL BROADCAST ENGINE ] ---
 async def global_broadcast(uid):
     async with bot.conversation(uid) as conv:
         await conv.send_message(style("Enter Broadcast Message:"))
@@ -251,20 +245,20 @@ async def global_broadcast(uid):
             except: continue
         await bot.send_message(uid, f"**✅ {style('Done!')} {style('Sent via')} `{sent}` {style('Accounts')}.**")
 
-# --- [ AUTO-RECOVERY STARTUP ] ---
 async def recovery_on_boot():
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute("SELECT phone, session_str, reply_msg FROM accounts WHERE status=1").fetchall()
     for row in rows:
         asyncio.create_task(start_auto_reply_engine(row[0], row[1], row[2]))
 
+# --- [ MAIN EXECUTION ] ---
 if __name__ == '__main__':
-    print("✅ XIRUS MODZ RUNNING!")
+    print("✅ STARTING SERVER & BOT...")
     
-    # 1. Start Web Server in Background Thread (Zaroori hai)
+    # STEP 1: Web Server Start (Most Important for Render)
     keep_alive()
     
-    # 2. Start Bot
+    # STEP 2: Main Loop
     loop = asyncio.get_event_loop()
     loop.create_task(recovery_on_boot())
     bot.run_until_disconnected()
